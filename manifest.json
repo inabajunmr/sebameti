@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "sebameti",
+  "version": "1.0.0",
+  "description": "Toggle side sliders to adjust the current page's content width without changing the window size.",
+  "permissions": ["scripting", "activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Toggle window width sliders"
+  }
+}
