@@ -9,3 +9,7 @@ Features:
 - Click the browser action to show adjustment handles pinned to the left and right edge of the page.
 - Drag either handle to increase or decrease the page padding on that side in real time.
 - Double-click a handle to instantly reset the padding on its side.
+
+## Install
+
+[Chrome Web Store](https://chrome.google.com/webstore/devconsole/4525d703-a6dc-4b8e-990f-1cddc9ad4c07/cppdcogciaoollkbobndogphenoeehkg/edit?hl=ja)
