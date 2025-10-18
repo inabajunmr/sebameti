@@ -12,4 +12,4 @@ Features:
 
 ## Install
 
-[Chrome Web Store](https://chrome.google.com/webstore/devconsole/4525d703-a6dc-4b8e-990f-1cddc9ad4c07/cppdcogciaoollkbobndogphenoeehkg/edit?hl=ja)
+[Chrome Web Store](https://chromewebstore.google.com/detail/sebameti/cppdcogciaoollkbobndogphenoeehkg?hl=ja)
