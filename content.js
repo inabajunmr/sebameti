@@ -33,8 +33,6 @@
         inset: 0;
         pointer-events: none;
         z-index: 2147483647;
-        display: flex;
-        justify-content: space-between;
       }
 
       #${OVERLAY_ID}.hidden {
@@ -42,7 +40,9 @@
       }
 
       .cwws-handle {
-        position: relative;
+        position: absolute;
+        top: 0;
+        bottom: 0;
         width: 16px;
         background: rgba(0, 0, 0, 0.05);
         backdrop-filter: blur(2px);
@@ -53,6 +53,14 @@
         justify-content: center;
         cursor: ew-resize;
         transition: background 0.2s ease;
+      }
+
+      .cwws-handle[data-side="left"] {
+        transform: translateX(-50%);
+      }
+
+      .cwws-handle[data-side="right"] {
+        transform: translateX(50%);
       }
 
       .cwws-handle:hover {
@@ -115,6 +123,8 @@
       "--cwws-padding-right",
       `${Math.round(layoutState.paddingRight)}px`
     );
+
+    updateHandlePositions();
   }
 
   function createOverlay() {
@@ -129,6 +139,8 @@
 
     overlayElement.append(leftHandle, rightHandle);
     document.documentElement.appendChild(overlayElement);
+
+    updateHandlePositions();
   }
 
   function buildHandle(side) {
@@ -154,6 +166,26 @@
     });
 
     return handle;
+  }
+
+  function updateHandlePositions() {
+    if (!overlayElement) {
+      return;
+    }
+
+    const leftHandle = overlayElement.querySelector(
+      '.cwws-handle[data-side="left"]'
+    );
+    const rightHandle = overlayElement.querySelector(
+      '.cwws-handle[data-side="right"]'
+    );
+
+    if (leftHandle) {
+      leftHandle.style.left = `${Math.round(layoutState.paddingLeft)}px`;
+    }
+    if (rightHandle) {
+      rightHandle.style.right = `${Math.round(layoutState.paddingRight)}px`;
+    }
   }
 
   function toggleOverlay() {
