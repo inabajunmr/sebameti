@@ -8,9 +8,12 @@
   const OVERLAY_ID = "cwws-overlay";
   const LAYOUT_CLASS = "cwws-adjusted";
   const MIN_CONTENT_WIDTH = 320;
+  const STORAGE_KEY = "cwws-layout";
+  const SAVE_DEBOUNCE_MS = 150;
 
   let overlayElement = null;
   let dragState = null;
+  let saveTimeoutId = null;
 
   const layoutState = {
     paddingLeft: 0,
@@ -19,6 +22,140 @@
     originalPaddingRight: null,
     active: false,
   };
+
+  function scheduleLayoutSave(force = false) {
+    if (
+      typeof chrome === "undefined" ||
+      !chrome.storage ||
+      !chrome.storage.local ||
+      typeof chrome.storage.local.set !== "function"
+    ) {
+      return;
+    }
+
+    const persist = () => {
+      chrome.storage.local.set(
+        {
+          [STORAGE_KEY]: {
+            paddingLeft: layoutState.paddingLeft,
+            paddingRight: layoutState.paddingRight,
+            active: layoutState.active,
+          },
+        },
+        () => {
+          if (chrome.runtime && chrome.runtime.lastError) {
+            // Ignore storage write failures.
+          }
+        }
+      );
+    };
+
+    if (force) {
+      if (saveTimeoutId !== null) {
+        clearTimeout(saveTimeoutId);
+        saveTimeoutId = null;
+      }
+      persist();
+      return;
+    }
+
+    if (saveTimeoutId !== null) {
+      return;
+    }
+
+    saveTimeoutId = window.setTimeout(() => {
+      saveTimeoutId = null;
+      persist();
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  function deactivateLayout() {
+    if (!layoutState.active) {
+      return;
+    }
+
+    const body = document.body;
+    if (body) {
+      body.style.paddingLeft =
+        layoutState.originalPaddingLeft !== null
+          ? layoutState.originalPaddingLeft
+          : body.style.paddingLeft;
+      body.style.paddingRight =
+        layoutState.originalPaddingRight !== null
+          ? layoutState.originalPaddingRight
+          : body.style.paddingRight;
+    }
+
+    const root = document.documentElement;
+    root.classList.remove(LAYOUT_CLASS);
+    root.style.removeProperty("--cwws-padding-left");
+    root.style.removeProperty("--cwws-padding-right");
+
+    layoutState.originalPaddingLeft = null;
+    layoutState.originalPaddingRight = null;
+    layoutState.active = false;
+    scheduleLayoutSave(true);
+  }
+
+  function activateOverlay() {
+    const apply = () => {
+      if (!ensureLayoutActive()) {
+        return false;
+      }
+
+      if (!overlayElement) {
+        createOverlay();
+      }
+
+      overlayElement.classList.remove("hidden");
+      scheduleLayoutSave(true);
+      return true;
+    };
+
+    if (!apply()) {
+      const onReady = () => {
+        document.removeEventListener("DOMContentLoaded", onReady);
+        apply();
+      };
+      document.addEventListener("DOMContentLoaded", onReady, { once: true });
+    }
+  }
+
+  function initializeFromStorage() {
+    if (
+      typeof chrome === "undefined" ||
+      !chrome.storage ||
+      !chrome.storage.local ||
+      typeof chrome.storage.local.get !== "function"
+    ) {
+      return;
+    }
+
+    chrome.storage.local.get(STORAGE_KEY, (result) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        return;
+      }
+
+      const saved = result && result[STORAGE_KEY];
+      if (!saved || typeof saved !== "object") {
+        return;
+      }
+
+      const left = Number(saved.paddingLeft);
+      const right = Number(saved.paddingRight);
+
+      if (Number.isFinite(left)) {
+        layoutState.paddingLeft = Math.max(0, left);
+      }
+      if (Number.isFinite(right)) {
+        layoutState.paddingRight = Math.max(0, right);
+      }
+
+      if (saved.active) {
+        activateOverlay();
+      }
+    });
+  }
 
   function ensureStyles() {
     if (document.getElementById(STYLE_ID)) {
@@ -111,8 +248,28 @@
   }
 
   function applyLayout(paddingLeft, paddingRight) {
-    layoutState.paddingLeft = Math.max(0, paddingLeft);
-    layoutState.paddingRight = Math.max(0, paddingRight);
+    let nextPaddingLeft = Math.max(0, paddingLeft);
+    let nextPaddingRight = Math.max(0, paddingRight);
+
+    const viewportWidth =
+      document.documentElement.clientWidth || window.innerWidth || 0;
+    if (viewportWidth > 0) {
+      const maxPaddingTotal = Math.max(viewportWidth - MIN_CONTENT_WIDTH, 0);
+      const totalPadding = nextPaddingLeft + nextPaddingRight;
+      if (totalPadding > maxPaddingTotal) {
+        if (totalPadding > 0) {
+          const scale = maxPaddingTotal / totalPadding;
+          nextPaddingLeft *= scale;
+          nextPaddingRight *= scale;
+        } else {
+          nextPaddingLeft = 0;
+          nextPaddingRight = 0;
+        }
+      }
+    }
+
+    layoutState.paddingLeft = nextPaddingLeft;
+    layoutState.paddingRight = nextPaddingRight;
 
     const root = document.documentElement;
     root.style.setProperty(
@@ -125,6 +282,10 @@
     );
 
     updateHandlePositions();
+
+    if (layoutState.active) {
+      scheduleLayoutSave();
+    }
   }
 
   function createOverlay() {
@@ -189,22 +350,14 @@
   }
 
   function toggleOverlay() {
-    if (!overlayElement) {
-      createOverlay();
-    }
-
-    if (!ensureLayoutActive()) {
-      const onReady = () => {
-        document.removeEventListener("DOMContentLoaded", onReady);
-        ensureLayoutActive();
-      };
-      document.addEventListener("DOMContentLoaded", onReady, { once: true });
-    }
-
-    overlayElement.classList.toggle("hidden");
-
-    if (overlayElement.classList.contains("hidden")) {
+    if (layoutState.active) {
+      if (overlayElement) {
+        overlayElement.classList.add("hidden");
+      }
       stopDrag();
+      deactivateLayout();
+    } else {
+      activateOverlay();
     }
   }
 
@@ -299,6 +452,9 @@
   function handlePointerUp(event) {
     if (dragState && event.pointerId === dragState.pointerId) {
       stopDrag();
+      if (layoutState.active) {
+        scheduleLayoutSave(true);
+      }
     }
   }
 
@@ -318,6 +474,8 @@
 
     dragState = null;
   }
+
+  initializeFromStorage();
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === "toggle-ui") {
